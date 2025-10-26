@@ -7,6 +7,7 @@ const connectDB = require("./config/db");
 
 // Import routes
 const possibleRawMaterialRoutes = require("./routes/possibleRawMaterialRoutes");
+const rawMaterialRoutes = require("./routes/rawMaterialRoutes");
 
 const app = express();
 const port = process.env.PORT || 8080;
@@ -28,6 +29,7 @@ app.use((req, res, next) => {
 
 // ---------------- ROUTES ----------------
 app.use("/api/possible-raw-materials", possibleRawMaterialRoutes);
+app.use("/api/raw-materials", rawMaterialRoutes);
 
 // ---------------- START SERVER ----------------
 (async () => {
