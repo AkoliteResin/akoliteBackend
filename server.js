@@ -1,6 +1,6 @@
 const express = require("express");
 const cors = require("cors");
-const { MongoClient } = require("mongodb");
+const { MongoClient, ObjectId } = require("mongodb");
 const data = require("./data"); // your resin definitions
 
 
@@ -153,12 +153,13 @@ app.post("/api/produce-resin", async (req, res) => {
     }
 
 
-    // Save production record
+    // Save production record (mark as pending)
     await producedCollection.insertOne({
       resinType,
       litres: Number(litres),
       producedAt: new Date(),
       materialsUsed: requiredMaterials,
+      status: 'pending'
     });
 
 
@@ -191,13 +192,124 @@ app.post("/api/produce-resin", async (req, res) => {
 
 
 app.get("/api/produced-resins", async (req, res) => {
-  const resins = await producedCollection.find().sort({ producedAt: -1 }).toArray();
-  const safeResins = resins.map(r => ({
-    ...r,
-    _id: r._id.toString(),
-    producedAt: r.producedAt ? new Date(r.producedAt).toISOString() : null,
-  }));
-  res.json(safeResins);
+  try {
+    const { producedCollection } = await connectDB();
+    const producedList = await producedCollection.find().sort({ producedAt: -1 }).toArray();
+    
+    const safeList = producedList.map(resin => ({
+      ...resin,
+      _id: resin._id.toString(),
+      producedAt: resin.producedAt ? new Date(resin.producedAt).toISOString() : null,
+      proceededAt: resin.proceededAt ? new Date(resin.proceededAt).toISOString() : null,
+      completedAt: resin.completedAt ? new Date(resin.completedAt).toISOString() : null,
+      deployedAt: resin.deployedAt ? new Date(resin.deployedAt).toISOString() : null,
+      deletedAt: resin.deletedAt ? new Date(resin.deletedAt).toISOString() : null,
+      status: resin.status || 'pending'
+    }));
+
+    res.json({
+      items: safeList,
+      total: safeList.length
+    });
+  } catch (err) {
+    console.error("GET /produced-resins error:", err);
+    res.status(500).json({ 
+      message: "Failed to fetch produced resins",
+      error: err.message 
+    });
+  }
+});
+
+
+// Mark resin as in-process (proceed)
+app.post('/api/produced-resins/:id/proceed', async (req, res) => {
+  const { id } = req.params;
+  if (!id || !ObjectId.isValid(id)) return res.status(400).json({ message: 'Invalid id' });
+  try {
+    const { producedCollection } = await connectDB();
+    const result = await producedCollection.findOneAndUpdate(
+      { _id: new ObjectId(id), status: { $nin: ['deleted', 'deployed'] } },
+      { $set: { status: 'in_process', proceededAt: new Date() } },
+      { returnDocument: 'after' }
+    );
+    if (!result.value) return res.status(404).json({ message: 'Production not found or cannot be proceeded' });
+    const updated = result.value;
+    updated._id = updated._id.toString();
+    res.json({ message: 'Production moved to in process', production: updated });
+  } catch (err) {
+    console.error('/proceed error', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// Mark resin as completed (done)
+app.post('/api/produced-resins/:id/complete', async (req, res) => {
+  const { id } = req.params;
+  if (!id || !ObjectId.isValid(id)) return res.status(400).json({ message: 'Invalid id' });
+  try {
+    const { producedCollection } = await connectDB();
+    const result = await producedCollection.findOneAndUpdate(
+      { _id: new ObjectId(id), status: { $nin: ['deleted', 'deployed'] } },
+      { $set: { status: 'done', completedAt: new Date() } },
+      { returnDocument: 'after' }
+    );
+    if (!result.value) return res.status(404).json({ message: 'Production not found or cannot be completed' });
+    const updated = result.value;
+    updated._id = updated._id.toString();
+    res.json({ message: 'Production marked as done', production: updated });
+  } catch (err) {
+    console.error('/complete error', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// Deploy production
+app.post('/api/produced-resins/:id/deploy', async (req, res) => {
+  const { id } = req.params;
+  if (!id || !ObjectId.isValid(id)) return res.status(400).json({ message: 'Invalid id' });
+  try {
+    const { producedCollection } = await connectDB();
+    const result = await producedCollection.findOneAndUpdate(
+      { _id: new ObjectId(id), status: { $nin: ['deleted', 'deployed'] } },
+      { $set: { status: 'deployed', deployedAt: new Date() } },
+      { returnDocument: 'after' }
+    );
+    if (!result.value) return res.status(404).json({ message: 'Production not found or cannot be deployed' });
+    const updated = result.value;
+    updated._id = updated._id.toString();
+    res.json({ message: 'Production deployed', production: updated });
+  } catch (err) {
+    console.error('/deploy error', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// Delete production and return materials to stock
+app.delete('/api/produced-resins/:id', async (req, res) => {
+  const { id } = req.params;
+  if (!id || !ObjectId.isValid(id)) return res.status(400).json({ message: 'Invalid id' });
+  try {
+    const { producedCollection, rawCollection } = await connectDB();
+    const production = await producedCollection.findOne({ _id: new ObjectId(id) });
+    if (!production) return res.status(404).json({ message: 'Production not found' });
+    if (production.status === 'deleted') return res.status(400).json({ message: 'Already deleted' });
+    if (production.status === 'deployed') return res.status(400).json({ message: 'Cannot delete deployed production' });
+
+    // Return materials
+    const ops = (production.materialsUsed || []).map(mat => ({
+      updateOne: {
+        filter: { name: mat.material },
+        update: { $inc: { totalQuantity: mat.requiredQty }, $set: { updatedAt: new Date() } }
+      }
+    }));
+    if (ops.length > 0) await rawCollection.bulkWrite(ops);
+
+    await producedCollection.updateOne({ _id: new ObjectId(id) }, { $set: { status: 'deleted', deletedAt: new Date() } });
+    res.json({ message: 'Production deleted and materials returned' });
+  } catch (err) {
+    console.error('/delete error', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
 });
 
 
