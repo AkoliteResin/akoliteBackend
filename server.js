@@ -6,8 +6,8 @@ const morgan = require("morgan");
 const connectDB = require("./config/db");
 
 // Import routes
-const possibleRawMaterialRoutes = require("./routes/possibleRawMaterialRoutes");
-const rawMaterialRoutes = require("./routes/rawMaterialRoutes");
+const possibleRawMaterialRoutes = require("./routes/possibleRawMaterial.routes");
+const rawMaterialRoutes = require("./routes/rawMaterial.routes");
 
 const app = express();
 const port = process.env.PORT || 8080;

@@ -4,7 +4,7 @@ const {
   addRawMaterial,
   getAllRawMaterials,
   getRawMaterialHistory
-} = require("../controllers/rawMaterialController");
+} = require("../controllers/rawMaterial.controller");
 
 router.post("/add", addRawMaterial); // add quantity
 router.get("/", getAllRawMaterials); // current stock

@@ -3,7 +3,7 @@ const router = express.Router();
 const {
   addPossibleRawMaterial,
   getPossibleRawMaterials,
-} = require("../controllers/possibleRawMaterialController");
+} = require("../controllers/possibleRawMaterial.controller");
 
 router.post("/", addPossibleRawMaterial);
 router.get("/", getPossibleRawMaterials);
