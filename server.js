@@ -16,10 +16,8 @@ const port = process.env.PORT || 8080;
 app.use(cors());
 app.use(express.json());
 
-// Log all HTTP requests to console in 'dev' format
+// Log all HTTP requests to console in 'dev' format using morgan. for POST/PUT, also log request body
 app.use(morgan("dev"));
-
-// Optional: log POST/PUT request body
 app.use((req, res, next) => {
   if (["POST", "PUT"].includes(req.method)) {
     console.log("📦 Request Body:", req.body);
@@ -28,6 +26,17 @@ app.use((req, res, next) => {
 });
 
 // ---------------- ROUTES ----------------
+
+app.get("/api/health", async (req, res) => {
+  try {
+    const db = await connectDB();
+    await db.command({ ping: 1 });
+    res.json({ status: "ok", message: "MongoDB connected" });
+  } catch (err) {
+    res.status(500).json({ status: "error", message: "MongoDB not connected" });
+  }
+});
+
 app.use("/api/possible-raw-materials", possibleRawMaterialRoutes);
 app.use("/api/raw-materials", rawMaterialRoutes);
 

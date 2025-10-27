@@ -1,7 +1,4 @@
-const {
-  createPossibleRawMaterial,
-  listPossibleRawMaterials,
-} = require("../models/possibleRawMaterial.model");
+const { createPossibleRawMaterial, listPossibleRawMaterials } = require("../services/possibleRawMaterial.service");
 
 exports.addPossibleRawMaterial = async (req, res) => {
   try {

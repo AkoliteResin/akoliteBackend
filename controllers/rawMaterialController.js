@@ -1,9 +1,10 @@
+// controllers/rawMaterial.controller.js
+const { addRawMaterialSchema } = require("../validation/rawMaterial.validation");
 const {
-  addRawMaterialSchema,
   addRawMaterialStock,
   listAllRawMaterials,
   getRawMaterialHistory
-} = require("../models/rawMaterial.model");
+} = require("../services/rawMaterial.service");
 
 exports.addRawMaterial = async (req, res) => {
   try {
