@@ -8,6 +8,7 @@ const connectDB = require("./config/db");
 // Import routes
 const possibleRawMaterialRoutes = require("./routes/possibleRawMaterial.routes");
 const rawMaterialRoutes = require("./routes/rawMaterial.routes");
+const productFormulaRoutes = require("./routes/productFormula.routes");
 
 const app = express();
 const port = process.env.PORT || 8080;
@@ -39,6 +40,7 @@ app.get("/api/health", async (req, res) => {
 
 app.use("/api/possible-raw-materials", possibleRawMaterialRoutes);
 app.use("/api/raw-materials", rawMaterialRoutes);
+app.use("/api/formulas", productFormulaRoutes);
 
 // ---------------- START SERVER ----------------
 (async () => {
