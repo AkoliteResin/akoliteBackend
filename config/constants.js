@@ -1,8 +1,23 @@
+const COLLECTIONS = {
+  POSSIBLE_RAW_MATERIALS: "possible_raw_materials",
+  RAW_MATERIALS_STOCK: "raw_materials_stock",
+  RAW_MATERIALS_HISTORY: "raw_materials_history",
+  PRODUCT_FORMULAS: "product_formulas"
+};
+
+const HISTORY_ACTION_TYPES = {
+  NEW_STOCK: "NEW_STOCK",
+  USED_FOR_PRODUCTION: "USED_FOR_PRODUCTION",
+  PRODUCTION_CANCELLATION: "PRODUCTION_CANCELLATION"
+};
+
+const CHANGE_DIRECTIONS = {
+  INCREASE: "INCREASE",
+  DECREASE: "DECREASE"
+};
+
 module.exports = {
-  COLLECTIONS: {
-    POSSIBLE_RAW_MATERIALS: "possible_raw_materials",
-    RAW_MATERIALS: "raw_materials",
-    RAW_MATERIALS_HISTORY: "raw_materials_history",
-    PRODUCT_FORMULAS: "product_formulas",
-  },
+  COLLECTIONS,
+  HISTORY_ACTION_TYPES,
+  CHANGE_DIRECTIONS
 };

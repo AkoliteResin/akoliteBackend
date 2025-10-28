@@ -1,5 +1,8 @@
 // controllers/rawMaterial.controller.js
-const { addRawMaterialSchema } = require("../validation/rawMaterial.validation");
+const {
+  addRawMaterialSchema,
+  getRawMaterialHistorySchema
+} = require("../validation/rawMaterial.validation");
 const {
   addRawMaterialStock,
   listAllRawMaterials,
@@ -31,11 +34,30 @@ exports.getAllRawMaterials = async (req, res) => {
 
 exports.getRawMaterialHistory = async (req, res) => {
   try {
-    const { rawMaterialId, page = 1, limit = 10 } = req.query;
-    const data = await getRawMaterialHistory({ rawMaterialId, page: Number(page), limit: Number(limit) });
+    const { error, value } = getRawMaterialHistorySchema.validate(req.query, {
+      abortEarly: false,
+      stripUnknown: true
+    });
+
+    if (error) {
+      return res.status(400).json({
+        message: "Validation failed",
+        errors: error.details.map(d => d.message)
+      });
+    }
+
+    const { rawMaterialId, actionType, page, limit } = value;
+
+    const data = await getRawMaterialHistory({
+      rawMaterialId,
+      actionType,
+      page,
+      limit
+    });
+
     res.json(data);
   } catch (err) {
-    console.error(err);
+    console.error("Error fetching raw material history:", err);
     res.status(500).json({ message: "Server error" });
   }
 };

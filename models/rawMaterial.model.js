@@ -4,7 +4,7 @@ const { COLLECTIONS } = require("../config/constants");
 
 async function getRawCollection() {
   const db = await connectDB();
-  return db.collection(COLLECTIONS.RAW_MATERIALS);
+  return db.collection(COLLECTIONS.RAW_MATERIALS_STOCK);
 }
 
 async function getHistoryCollection() {
