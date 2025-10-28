@@ -1,8 +1,9 @@
 const {
   raiseProductionRequest,
   listProductionRequests,
+  updateProductionRequestStatus
 } = require("../services/productionRequest.service");
-const { productionRequestSchema } = require("../validation/productionRequest.validation");
+const { productionRequestSchema,updateProductionStatusSchema } = require("../validation/productionRequest.validation");
 
 /**
  * POST /production-requests
@@ -33,7 +34,23 @@ async function getAllProductionRequests(req, res) {
   }
 }
 
+async function  updateRequestStatus (req, res){
+  try {
+    const { id } = req.params;
+
+    const { error, value } = updateProductionStatusSchema.validate(req.body);
+    if (error) return res.status(400).json({ message: error.details[0].message });
+
+    const result = await updateProductionRequestStatus({ id, newStatus: value.newStatus });
+    res.json({ message: "Production request status updated", data: result });
+  } catch (err) {
+    console.error("Error updating production status:", err);
+    res.status(400).json({ message: err.message });
+  }
+};
+
 module.exports = {
   createProductionRequest,
   getAllProductionRequests,
+  updateRequestStatus
 };

@@ -142,10 +142,39 @@ async function useRawMaterialForProduction({ rawMaterialId, quantity, referenceI
   };
 }
 
+async function restoreRawMaterialsAfterCancel(request) {
+  const rawCollection = await getRawCollection();
+  const historyCollection = await getHistoryCollection();
+
+  for (const mat of request.materials || []) {
+    // Increase the stock back
+    await rawCollection.updateOne(
+      { rawMaterialId: mat.rawMaterialId },
+      {
+        $inc: { totalQuantity: mat.requiredQty },
+        $set: { updatedDate: new Date() }
+      }
+    );
+
+    // Log history
+    const historyDoc = {
+      id: uuidv4(),
+      rawMaterialId: mat.rawMaterialId,
+      name: mat.rawMaterialName,
+      quantity: mat.requiredQty,
+      actionType: HISTORY_ACTION_TYPES.RESTOCKED_AFTER_CANCEL,
+      changeDirection: CHANGE_DIRECTIONS.INCREASE,
+      referenceId: request.id,
+      createdDate: new Date()
+    };
+    await historyCollection.insertOne(historyDoc);
+  }
+}
 
 module.exports = {
   addRawMaterialStock,
   listAllRawMaterials,
   getRawMaterialHistory,
-  useRawMaterialForProduction
+  useRawMaterialForProduction,
+  restoreRawMaterialsAfterCancel
 };

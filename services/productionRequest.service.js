@@ -4,8 +4,9 @@ const { getCollection: getFormulaCollection } = require("../models/productFormul
 const { getRawCollection: getRawMaterialCollection,
         getHistoryCollection: getHistoryCollection
  } = require("../models/rawMaterial.model");
- const { useRawMaterialForProduction } = require("../services/rawMaterial.service");
+ const { useRawMaterialForProduction, restoreRawMaterialsAfterCancel } = require("../services/rawMaterial.service");
 const { getCollection: getPossibleRawMaterialCollection } = require("../models/possibleRawMaterial.model");
+const { PRODUCTION_STATUS, VALID_STATUS_TRANSITIONS,  } = require("../config/constants");
 
 /**
  * HELPER FUNCTIONS
@@ -62,7 +63,7 @@ async function createProductionRequest({ productName, quantity, requiredMaterial
     productName,
     quantity,
     materials: requiredMaterials,
-    status: "requested",
+    status: PRODUCTION_STATUS.REQUESTED,
     createdDate: new Date()
   };
   await productionRequestCollection.insertOne(request);
@@ -107,7 +108,35 @@ async function listProductionRequests() {
   return await collection.find().sort({ createdDate: -1 }).toArray();
 }
 
+async function updateProductionRequestStatus({ id, newStatus }) {
+  const productionCollection = await getProductionRequestCollection();
+  const request = await productionCollection.findOne({ id });
+  if (!request) throw new Error("Production request not found");
+
+  const currentStatus = request.status;
+  const allowedNextStatuses = VALID_STATUS_TRANSITIONS[currentStatus] || [];
+
+  // ❌ Invalid transition
+  if (!allowedNextStatuses.includes(newStatus)) {
+    throw new Error(`Invalid status transition: ${currentStatus} → ${newStatus}`);
+  }
+
+  // ✅ Update status
+  await productionCollection.updateOne(
+    { id },
+    { $set: { status: newStatus, updatedDate: new Date() } }
+  );
+
+  // ♻️ If CANCELED or DECLINED — restore stock
+  if ([PRODUCTION_STATUS.CANCELED, PRODUCTION_STATUS.DECLINED].includes(newStatus)) {
+    await restoreRawMaterialsAfterCancel(request);
+  }
+
+  return { id, previousStatus: currentStatus, newStatus };
+}
+
 module.exports = {
   raiseProductionRequest,
   listProductionRequests,
+  updateProductionRequestStatus
 };

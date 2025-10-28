@@ -1,4 +1,7 @@
 const Joi = require("joi");
+const { PRODUCTION_STATUS } = require("../config/constants");
+
+const allStatuses = Object.values(PRODUCTION_STATUS);
 
 const productionRequestSchema = Joi.object({
   productName: Joi.string().trim().required().messages({
@@ -12,6 +15,17 @@ const productionRequestSchema = Joi.object({
   }),
 });
 
+const updateProductionStatusSchema = Joi.object({
+  newStatus: Joi.string()
+    .valid(...allStatuses) 
+    .required()
+    .messages({
+      "any.required": "newStatus is required",
+      "any.only": `newStatus must be one of: ${allStatuses.join(", ")}`,
+    }),
+});
+
 module.exports = {
   productionRequestSchema,
+  updateProductionStatusSchema,
 };
