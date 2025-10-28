@@ -26,7 +26,7 @@ async function createPossibleRawMaterial(payload) {
   const doc = {
     id: uuidv4(),
     name: value.name,
-    addedDate: new Date(),
+    createdDate: new Date(),
   };
 
   await collection.insertOne(doc);
@@ -38,12 +38,12 @@ async function createPossibleRawMaterial(payload) {
  */
 async function listPossibleRawMaterials() {
   const collection = await getCollection();
-  const rows = await collection.find().sort({ addedDate: -1 }).toArray();
+  const rows = await collection.find().sort({ createdDate: -1 }).toArray();
 
   return rows.map(r => ({
     id: r.id,
     name: r.name,
-    addedDate: r.addedDate,
+    createdDate: r.createdDate,
   }));
 }
 

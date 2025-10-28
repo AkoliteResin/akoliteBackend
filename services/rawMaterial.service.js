@@ -21,7 +21,7 @@ async function addRawMaterialStock({ rawMaterialId, quantity, receivedDate }) {
     { rawMaterialId },
     { 
       $inc: { totalQuantity: quantity },
-      $set: { updatedAt: new Date() }
+      $set: { updatedDate: new Date() }
     },
     { upsert: true }
   );
@@ -31,7 +31,7 @@ async function addRawMaterialStock({ rawMaterialId, quantity, receivedDate }) {
     rawMaterialId,
     name: possibleMaterial.name,
     quantity,
-    receivedDate: date
+    createdDate: date
   };
   await historyCollection.insertOne(historyDoc);
 
@@ -66,7 +66,7 @@ async function getRawMaterialHistory({ rawMaterialId, page = 1, limit = 10 }) {
 
   const docs = await historyCollection
     .find(query)
-    .sort({ receivedDate: -1 })
+    .sort({ createdDate: -1 })
     .skip(skip)
     .limit(limit)
     .toArray();

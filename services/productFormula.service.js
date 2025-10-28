@@ -16,7 +16,7 @@ async function createProductFormulaService(value) {
 
   // Validate raw material IDs
   const possibleRawCollection = await getPossibleRawMaterialCollection();
-  const allRawIds = value.raw_materials.map(r => r.raw_material_id);
+  const allRawIds = value.rawMaterials.map(r => r.rawMaterialId);
   const found = await possibleRawCollection.find({ id: { $in: allRawIds } }).toArray();
 
   if (found.length !== allRawIds.length) {
@@ -27,7 +27,7 @@ async function createProductFormulaService(value) {
   const doc = {
     id: uuidv4(),
     name: value.name,
-    raw_materials: value.raw_materials,
+    rawMaterials: value.rawMaterials,
     createdDate: new Date(),
   };
 
@@ -40,7 +40,7 @@ async function createProductFormulaService(value) {
  */
 async function listProductFormulasService() {
   const collection = await getCollection();
-  const formulas = await collection.find().sort({ createdAt: -1 }).toArray();
+  const formulas = await collection.find().sort({ createdDate: -1 }).toArray();
 
   const possibleRawMaterialCollection = await getPossibleRawMaterialCollection();
   const possibleRawMaterials = await possibleRawMaterialCollection.find().toArray();
@@ -53,10 +53,10 @@ async function listProductFormulasService() {
   return formulas.map(f => ({
     id: f.id,
     name: f.name,
-    created_date: f.createdDate,
-    raw_material: f.raw_materials.map(r => ({
-      raw_material_id: r.raw_material_id,
-      raw_material_name: materialMap[r.raw_material_id] || "Unknown",
+    createdDate: f.createdDate,
+    rawMaterials: f.rawMaterials.map(r => ({
+      rawMaterialId: r.rawMaterialId,
+      rawMaterialsName: materialMap[r.rawMaterialId] || "Unknown",
       percentage: r.percentage,
     })),
   }));

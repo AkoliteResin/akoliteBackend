@@ -2,15 +2,24 @@ const Joi = require("joi");
 
 const productFormulaSchema = Joi.object({
   name: Joi.string().trim().required(),
-  raw_materials: Joi.array()
+  rawMaterials: Joi.array()
     .items(
       Joi.object({
-        raw_material_id: Joi.string().uuid().required(),
+        rawMaterialId: Joi.string().uuid().required(),
         percentage: Joi.number().min(0).max(100).required(),
       })
     )
     .min(1)
-    .required(),
+    .required()
+    .custom((arr, helpers) => {
+      const total = arr.reduce((sum, r) => sum + r.percentage, 0);
+      if (Math.abs(total - 100) > 0.5) {
+        return helpers.message(
+          `Total percentage must be approximately 100 (currently ${total.toFixed(2)})`
+        );
+      }
+      return arr;
+    }, "Total percentage validation"),
 });
 
 module.exports = { productFormulaSchema };
