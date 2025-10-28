@@ -11,7 +11,7 @@ async function connectDB() {
 
   try {
     await client.connect(); // Connect once
-    db = client.db("resinDB");
+    db = client.db("resinDB2");
     console.log("✅ MongoDB connected");
     return db;
   } catch (err) {

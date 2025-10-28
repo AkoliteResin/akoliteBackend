@@ -103,10 +103,34 @@ async function raiseProductionRequest({ productName, quantity }) {
 /**
  * List all production requests
  */
-async function listProductionRequests() {
+async function listProductionRequests({ page = 1, limit = 10, productName, status }) {
   const collection = await getProductionRequestCollection();
-  return await collection.find().sort({ createdDate: -1 }).toArray();
+
+  const query = {};
+  if (productName) query.productName = { $regex: `^${productName}$`, $options: "i" }; // case-insensitive
+  if (status) query.status = status;
+
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+  const total = await collection.countDocuments(query);
+
+  const data = await collection
+    .find(query)
+    .sort({ createdDate: -1 })
+    .skip(skip)
+    .limit(parseInt(limit))
+    .toArray();
+
+  return {
+    data,
+    pagination: {
+      total,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      totalPages: Math.ceil(total / limit),
+    },
+  };
 }
+
 
 async function updateProductionRequestStatus({ id, newStatus }) {
   const productionCollection = await getProductionRequestCollection();

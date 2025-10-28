@@ -3,7 +3,11 @@ const {
   listProductionRequests,
   updateProductionRequestStatus
 } = require("../services/productionRequest.service");
-const { productionRequestSchema,updateProductionStatusSchema } = require("../validation/productionRequest.validation");
+const { 
+  productionRequestSchema,
+  updateProductionStatusSchema,
+  productionRequestQuerySchema,
+ } = require("../validation/productionRequest.validation");
 
 /**
  * POST /production-requests
@@ -27,7 +31,20 @@ async function createProductionRequest(req, res) {
  */
 async function getAllProductionRequests(req, res) {
   try {
-    const result = await listProductionRequests();
+    const { value, error } = productionRequestQuerySchema.validate(req.query, {
+      abortEarly: false
+    });
+
+    if (error) {
+      return res.status(400).json({
+        error: "Validation failed",
+        details: error.details.map((d) => d.message)
+      });
+    }
+
+    const { page, limit, productName, status } = value;
+    const result = await listProductionRequests({ page, limit, productName, status });
+
     res.status(200).json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });

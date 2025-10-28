@@ -25,7 +25,21 @@ const updateProductionStatusSchema = Joi.object({
     }),
 });
 
+const productionRequestQuerySchema = Joi.object({
+  page: Joi.number().integer().min(1).default(1),
+  limit: Joi.number().integer().min(1).max(100).default(10),
+  productName: Joi.string().trim().optional(),
+  status: Joi.string()
+    .valid(...allStatuses)
+    .optional()
+    .messages({
+      "any.only": `Invalid status. Allowed values: ${allStatuses.join(", ")}`,
+      "string.base": "Status must be a string",
+    }),
+});
+
 module.exports = {
   productionRequestSchema,
   updateProductionStatusSchema,
+  productionRequestQuerySchema,
 };
