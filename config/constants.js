@@ -2,7 +2,8 @@ const COLLECTIONS = {
   POSSIBLE_RAW_MATERIALS: "possible_raw_materials",
   RAW_MATERIALS_STOCK: "raw_materials_stock",
   RAW_MATERIALS_HISTORY: "raw_materials_history",
-  PRODUCT_FORMULAS: "product_formulas"
+  PRODUCT_FORMULAS: "product_formulas",
+  PRODUCTION_REQUESTS: "production_requests"
 };
 
 const HISTORY_ACTION_TYPES = {

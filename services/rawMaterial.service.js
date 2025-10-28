@@ -87,26 +87,30 @@ async function getRawMaterialHistory({ rawMaterialId, actionType, page = 1, limi
   };
 }
 
-async function useRawMaterialForProduction({ rawMaterialId, quantity }) {
+async function useRawMaterialForProduction({ rawMaterialId, quantity, referenceId }) {
   const collection = await getRawCollection();
   const historyCollection = await getHistoryCollection();
   const db = await connectDB();
 
+  // 🔍 Validate material existence
   const material = await db
     .collection(COLLECTIONS.POSSIBLE_RAW_MATERIALS)
     .findOne({ id: rawMaterialId });
 
   if (!material) throw new Error("Invalid rawMaterialId");
-  if (quantity <= 0) throw new Error("Quantity must be positive");
+  if (quantity <= 0) throw new Error("Quantity must be a positive number");
 
-  // Fetch current stock
+  // 📦 Check available stock
   const stock = await collection.findOne({ rawMaterialId });
+  const availableQty = stock ? stock.totalQuantity : 0;
 
-  if (!stock || stock.totalQuantity < quantity) {
-    throw new Error("Insufficient stock for this operation");
+  if (availableQty < quantity) {
+    throw new Error(
+      `Insufficient stock for ${material.name}. Required: ${quantity}, Available: ${availableQty}`
+    );
   }
 
-  // Decrease stock
+  // 🔻 Deduct stock
   await collection.updateOne(
     { rawMaterialId },
     {
@@ -115,7 +119,7 @@ async function useRawMaterialForProduction({ rawMaterialId, quantity }) {
     }
   );
 
-  // Record history
+  // 🧾 Record history
   const historyDoc = {
     id: uuidv4(),
     rawMaterialId,
@@ -123,11 +127,19 @@ async function useRawMaterialForProduction({ rawMaterialId, quantity }) {
     quantity,
     actionType: HISTORY_ACTION_TYPES.USED_FOR_PRODUCTION,
     changeDirection: CHANGE_DIRECTIONS.DECREASE,
+    referenceId: referenceId || null, // optional link to production request
     createdDate: new Date()
   };
 
   await historyCollection.insertOne(historyDoc);
-  return historyDoc;
+
+  return {
+    message: "Raw material successfully used for production",
+    material: material.name,
+    usedQuantity: quantity,
+    remainingQuantity: availableQty - quantity,
+    history: historyDoc
+  };
 }
 
 
