@@ -8,33 +8,32 @@ const { getRawCollection: getRawMaterialCollection,
 const { getCollection: getPossibleRawMaterialCollection } = require("../models/possibleRawMaterial.model");
 
 /**
- * Raise a production request — deducts materials & records usage history
+ * HELPER FUNCTIONS
  */
-async function raiseProductionRequest({ productName, quantity }) {
-  if (!productName || !quantity || quantity <= 0)
-    throw new Error("Invalid input: productName and quantity are required");
 
+async function getFormulaByProductName(productName) {
   const formulaCollection = await getFormulaCollection();
   const formula = await formulaCollection.findOne({
     name: { $regex: `^${productName}$`, $options: "i" }
   });
   if (!formula) throw new Error(`No formula found for product '${productName}'`);
+  return formula;
+}
 
+async function calculateRequiredMaterials(formula, quantity) {
   const rawMaterialCollection = await getRawMaterialCollection();
   const possibleRawMaterialCollection = await getPossibleRawMaterialCollection();
 
-  // 🔍 Fetch all possible raw materials for name lookup
   const possibleRawMaterials = await possibleRawMaterialCollection.find().toArray();
   const materialNameMap = possibleRawMaterials.reduce((acc, m) => {
     acc[m.id] = m.name;
     return acc;
   }, {});
 
-  // 🧮 Calculate required raw materials
   const requiredMaterials = [];
+
   for (const mat of formula.rawMaterials) {
     const requiredQty = (mat.percentage / 100) * quantity;
-
     const rawMat = await rawMaterialCollection.findOne({ rawMaterialId: mat.rawMaterialId });
     const availableQty = rawMat ? rawMat.totalQuantity : 0;
 
@@ -53,11 +52,13 @@ async function raiseProductionRequest({ productName, quantity }) {
     });
   }
 
-  // 🧾 Create the production request record
+  return requiredMaterials;
+}
+
+async function createProductionRequest({ productName, quantity, requiredMaterials }) {
   const productionRequestCollection = await getProductionRequestCollection();
-  const requestId = uuidv4();
   const request = {
-    id: requestId,
+    id: uuidv4(),
     productName,
     quantity,
     materials: requiredMaterials,
@@ -65,15 +66,35 @@ async function raiseProductionRequest({ productName, quantity }) {
     createdDate: new Date()
   };
   await productionRequestCollection.insertOne(request);
+  return request;
+}
 
-  // 🏭 Deduct stock & create history records
+async function deductMaterialsAndRecordHistory(requiredMaterials, referenceId) {
   for (const mat of requiredMaterials) {
     await useRawMaterialForProduction({
       rawMaterialId: mat.rawMaterialId,
       quantity: mat.requiredQty,
-      referenceId: requestId // ✅ link history to this production request
+      referenceId
     });
   }
+}
+
+/**
+ * Main Functions
+ */
+
+/**
+ * Raise a production request — deducts materials & records usage history
+ */
+async function raiseProductionRequest({ productName, quantity }) {
+  if (!productName || !quantity || quantity <= 0) {
+    throw new Error("Invalid input: productName and quantity are required");
+  }
+
+  const formula = await getFormulaByProductName(productName);
+  const requiredMaterials = await calculateRequiredMaterials(formula, quantity);
+  const request = await createProductionRequest({ productName, quantity, requiredMaterials });
+  await deductMaterialsAndRecordHistory(requiredMaterials, request.id);
 
   return request;
 }
