@@ -1,6 +1,6 @@
 const { MongoClient } = require('mongodb');
 
-const uri = 'mongodb://127.0.0.1:27017';
+const uri = 'mongodb+srv://softwareakolite_db_user:ziC1W3x1n9tKIBpg@cluster0.unqau87.mongodb.net/';
 const client = new MongoClient(uri);
 
 async function connectDB() {
@@ -9,13 +9,18 @@ async function connectDB() {
   }
   const db = client.db('resinDB');
   return {
+    usersCollection: db.collection('users'),
     rawCollection: db.collection('raw_materials'),
     producedCollection: db.collection('produced_resins'),
+    resinsCollection: db.collection('resins'),
     futureOrdersCollection: db.collection('future_orders'),
     clientsCollection: db.collection('clients'),
+    sellersCollection: db.collection('sellers'),
+    sellerPricesCollection: db.collection('seller_prices'),
     billingCollection: db.collection('billing'),
     batchSettingsCollection: db.collection('batch_settings'),
     expensesCollection: db.collection('expenses'),
+    overtimeCollection: db.collection('overtime_expenses'),
   };
 }
 
