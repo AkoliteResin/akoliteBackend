@@ -2,7 +2,11 @@ require('dotenv').config();
 
 const express = require("express");
 const cors = require("cors");
+const https = require("https");
+const fs = require("fs");
+const path = require("path");
 const { connectDB } = require('./src/db');
+const config = require('./config');
 const data = require("./data"); // your resin definitions
 const { verifyToken } = require('./src/middleware/auth');
 
@@ -20,7 +24,7 @@ const sellersRouter = require('./src/routes/sellers');
 const billingRouter = require('./src/routes/billing');
 
 const app = express();
-const port = 5000;
+const port = config.PORT;
 
 app.use(cors());
 app.use(express.json());
@@ -90,11 +94,35 @@ app.put("/api/raw-materials/modify", async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
-
 // NOTE: Resin GET/POST/PUT/DELETE handled by `resins` router (falls back to static `data` when DB empty)
 
 // ---------------- Start Server ----------------
-const server = app.listen(port, () => console.log(`✅ Server running on http://localhost:${port}`));
+
+// Try to load SSL certificates for HTTPS
+const sslOptions = {};
+const keyPath = process.env.SSL_KEY_PATH || '/etc/ssl/private/server.key';
+const certPath = process.env.SSL_CERT_PATH || '/etc/ssl/certs/server.crt';
+
+if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
+  sslOptions.key = fs.readFileSync(keyPath);
+  sslOptions.cert = fs.readFileSync(certPath);
+  console.log('✅ SSL certificates loaded. Starting HTTPS server...');
+}
+
+let server;
+if (Object.keys(sslOptions).length > 0) {
+  // Use HTTPS if certificates are available
+  server = https.createServer(sslOptions, app);
+} else {
+  // Fall back to HTTP if no certificates
+  const http = require('http');
+  server = http.createServer(app);
+}
+
+server.listen(port, config.HOST, () => {
+  const protocol = Object.keys(sslOptions).length > 0 ? 'HTTPS' : 'HTTP';
+  console.log(`✅ Server running on ${protocol} at ${config.getServerUrl()}`);
+});
 
 server.on('error', (err) => {
   console.error('Server failed to start:', err);

@@ -9,6 +9,7 @@ async function connectDB() {
   }
   const db = client.db('resinDB');
   return {
+    db, // add db object for direct access
     usersCollection: db.collection('users'),
     rawCollection: db.collection('raw_materials'),
     producedCollection: db.collection('produced_resins'),

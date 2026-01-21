@@ -1,21 +1,29 @@
 const express = require('express');
 const router = express.Router();
 const { connectDB } = require('../db');
-const { ObjectId } = require('mongodb');
 
-// GET all future orders
+/**
+ * GET all future orders
+ */
 router.get('/', async (req, res) => {
   try {
     const { futureOrdersCollection } = await connectDB();
-    const orders = await futureOrdersCollection.find().sort({ createdAt: -1 }).toArray();
+
+    const orders = await futureOrdersCollection
+      .find()
+      .sort({ createdAt: -1 })
+      .toArray();
+
     res.json(orders);
   } catch (err) {
-    console.error('Error fetching future orders:', err);
+    console.error(err);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
-// POST add new future order
+/**
+ * POST create future order
+ */
 router.post('/', async (req, res) => {
   const { clientName, resinType, litres, unit, scheduledDate } = req.body;
 
@@ -24,55 +32,111 @@ router.post('/', async (req, res) => {
   }
 
   try {
-    const { futureOrdersCollection, clientsCollection } = await connectDB();
+    const { db, futureOrdersCollection, clientsCollection } =
+      await connectDB();
 
-    // Get client location (letters only, fallback to 'UNK')
-    const client = await clientsCollection.findOne({ name: clientName });
-    let clientLocation = client?.location || client?.address || '';
-    let locationCode = (clientLocation.match(/[A-Za-z]+/g) || []).join('').substring(0, 3).toUpperCase();
-    if (!locationCode) locationCode = 'UNK';
+    // --------------------
+    // Case-insensitive client lookup (FIX)
+    // --------------------
+    let client = await clientsCollection.findOne({
+      name: { $regex: `^${clientName.trim()}$`, $options: 'i' }
+    });
+    console.log('ORDER DEBUG: clientName from request:', clientName);
+    console.log('ORDER DEBUG: client lookup result:', client);
+    console.log('ORDER DEBUG: Request body:', JSON.stringify(req.body));
 
-    // Format scheduled date as DDMMYYYY
+    // Create default Godown if it doesn't exist
+    if (!client && clientName.toLowerCase() === 'godown') {
+      const newGodown = {
+        name: 'Godown',
+        phone: '-',
+        address: 'Default',
+        district: 'Default',
+        state: 'Default',
+        email: '',
+        company: 'Godown',
+        gst: ''
+      };
+      const result = await clientsCollection.insertOne(newGodown);
+      client = { ...newGodown, _id: result.insertedId };
+      console.log('ORDER DEBUG: Created default Godown:', client);
+    }
+
+    let rawLocation = '';
+    if (client) {
+      rawLocation = client.district || client.location || client.state || '';
+    }
+    console.log('ORDER DEBUG: extracted rawLocation:', rawLocation);
+
+    let locationCode = '';
+    if (rawLocation) {
+      locationCode = rawLocation.replace(/[^A-Za-z]/g, '').substring(0, 3).toUpperCase();
+    }
+    console.log('ORDER DEBUG: final locationCode:', locationCode);
+
+    if (!client) {
+      return res.status(400).json({ message: 'Client not found' });
+    }
+    if (!rawLocation) {
+      return res.status(400).json({ message: 'Client location missing' });
+    }
+
+    // --------------------
+    // Normalize date
+    // --------------------
     const scheduledDateObj = new Date(scheduledDate);
+    if (isNaN(scheduledDateObj)) {
+      return res.status(400).json({ message: 'Invalid date' });
+    }
+
     const day = String(scheduledDateObj.getDate()).padStart(2, '0');
     const month = String(scheduledDateObj.getMonth() + 1).padStart(2, '0');
     const year = scheduledDateObj.getFullYear();
     const formattedDate = `${day}${month}${year}`;
 
-    // Serial number: unique per location+date
-    const dateStart = new Date(scheduledDateObj);
-    dateStart.setHours(0, 0, 0, 0);
-    const dateEnd = new Date(scheduledDateObj);
-    dateEnd.setHours(23, 59, 59, 999);
-    const serialQuery = {
-      scheduledDate: { $gte: dateStart, $lte: dateEnd },
-      // Use locationCode in orderId
-      orderId: { $regex: `^AKO-${locationCode}-${formattedDate}-` }
-    };
-    const countToday = await futureOrdersCollection.countDocuments(serialQuery);
-    const serialNumber = String(countToday + 1).padStart(5, '0');
+    // --------------------
+    // Atomic counter (NO DUPLICATES)
+    // --------------------
+    const counterKey = `AKO-${locationCode}-${formattedDate}`;
 
-    // Generate order ID: AKO-LOCATION-DDMMYYYY-00001
-    const orderId = `AKO-${locationCode}-${formattedDate}-${serialNumber}`;
+    const counterResult = await db
+      .collection('counters')
+      .findOneAndUpdate(
+        { _id: counterKey },
+        { $inc: { seq: 1 } },
+        { upsert: true, returnDocument: 'after' }
+      );
 
+    const counter = counterResult.value || counterResult;
+    const serial = String(counter.seq).padStart(6, '0');
+    const orderId = `${counterKey}-${serial}`;
+
+    // --------------------
+    // Insert order
+    // --------------------
     const newOrder = {
-      clientName,
+      clientName: client.name,
       resinType,
       litres: Number(litres),
       unit: unit || 'litres',
-      scheduledDate,
-      orderNumber: orderId,
+      scheduledDate: scheduledDateObj,
       orderId,
+      orderNumber: orderId,
       status: 'pending',
-      createdAt: new Date(),
-      fulfilledQty: 0
+      fulfilledQty: 0,
+      createdAt: new Date()
     };
 
     const result = await futureOrdersCollection.insertOne(newOrder);
-    res.status(201).json({ ...newOrder, _id: result.insertedId });
+
+    res.status(201).json({
+      ...newOrder,
+      _id: result.insertedId
+    });
   } catch (err) {
-    console.error('Error adding future order:', err);
-    res.status(500).json({ message: 'Server error' });
+    console.error('POST /api/future-orders ERROR:', err);
+    console.error('Error stack:', err.stack);
+    res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
 
