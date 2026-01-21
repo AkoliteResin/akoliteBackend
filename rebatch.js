@@ -1,4 +1,5 @@
 const http = require('http');
+const config = require('./config');
 
 const data = JSON.stringify({
   scheduledDate: '2025-11-01',
@@ -6,8 +7,8 @@ const data = JSON.stringify({
 });
 
 const options = {
-  hostname: 'localhost',
-  port: 5000,
+  hostname: config.HOST,
+  port: config.PORT,
   path: '/api/batches/rebatch',
   method: 'POST',
   headers: {

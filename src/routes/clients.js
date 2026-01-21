@@ -1,85 +1,106 @@
 const express = require('express');
-const { ObjectId } = require('mongodb');
-const router = express.Router();
 const { connectDB } = require('../db');
+const { ObjectId } = require('mongodb');
 
-// Simple admin password check for destructive actions - expects header x-admin-pass
-const ADMIN_PASS = '123@Ako';
-function requireAdminPassword(req, res) {
-  const provided = req.headers['x-admin-pass'];
-  if (!provided || provided !== ADMIN_PASS) {
-    res.status(401).json({ message: 'Unauthorized: invalid admin password' });
-    return false;
-  }
-  return true;
-}
+const router = express.Router();
 
-// GET /api/clients - list all clients
+// Get all clients
 router.get('/', async (req, res) => {
   try {
     const { clientsCollection } = await connectDB();
-    const clients = await clientsCollection.find().toArray();
+    const clients = await clientsCollection.find({}).toArray();
     res.json(clients);
   } catch (err) {
-    console.error('/api/clients GET error', err);
-    res.status(500).json({ message: 'Failed to fetch clients' });
+    console.error(err);
+    res.status(500).json({ message: 'Server error while fetching clients' });
   }
 });
 
-// POST /api/clients - create a client
+// Add a new client
 router.post('/', async (req, res) => {
-  const { name, phone, address, email, company, gst, notes, district, state } = req.body;
-  if (!name || !phone || !district || !state) return res.status(400).json({ message: 'Name, phone, district, and state are required' });
   try {
     const { clientsCollection } = await connectDB();
-    const exists = await clientsCollection.findOne({ name });
-    if (exists) return res.status(409).json({ message: 'Client with this name already exists' });
-    const result = await clientsCollection.insertOne({ name, phone, address: address || '', email: email || '', company: company || '', gst: gst || '', notes: notes || '', district, state, createdAt: new Date() });
-    const clientDoc = await clientsCollection.findOne({ _id: result.insertedId });
-    res.status(201).json(clientDoc);
+    const newClient = req.body;
+    delete newClient._id; // Ensure we are not trying to insert an existing _id
+    const result = await clientsCollection.insertOne(newClient);
+    const savedClient = await clientsCollection.findOne({ _id: result.insertedId });
+    res.status(201).json(savedClient);
   } catch (err) {
-    console.error('/api/clients POST error', err);
-    res.status(500).json({ message: 'Failed to create client' });
+    console.error(err);
+    res.status(500).json({ message: 'Server error while adding a new client' });
   }
 });
 
-// PUT /api/clients/:id - update client
+// Update a client
 router.put('/:id', async (req, res) => {
-  const { id } = req.params;
-  const { name, phone, address, email, company, gst, notes, district, state } = req.body;
-  if (!id || !ObjectId.isValid(id)) return res.status(400).json({ message: 'Invalid client ID' });
-  if (!name || !phone || !district || !state) return res.status(400).json({ message: 'Name, phone, district, and state are required' });
   try {
     const { clientsCollection } = await connectDB();
-    const exists = await clientsCollection.findOne({ name, _id: { $ne: new ObjectId(id) } });
-    if (exists) return res.status(409).json({ message: 'Another client with this name already exists' });
-
+    const { id } = req.params;
+    const updatedClient = req.body;
+    delete updatedClient._id; // Do not update the _id
     const result = await clientsCollection.updateOne(
       { _id: new ObjectId(id) },
-      { $set: { name, phone, address: address || '', email: email || '', company: company || '', gst: gst || '', notes: notes || '', district, state, updatedAt: new Date() } }
+      { $set: updatedClient }
     );
-    if (result.matchedCount === 0) return res.status(404).json({ message: 'Client not found' });
-    const updatedClient = await clientsCollection.findOne({ _id: new ObjectId(id) });
-    res.json(updatedClient);
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ message: 'Client not found' });
+    }
+    res.json({ message: 'Client updated successfully' });
   } catch (err) {
-    console.error('/api/clients PUT error', err);
-    res.status(500).json({ message: 'Failed to update client' });
+    console.error(err);
+    res.status(500).json({ message: 'Server error while updating client' });
   }
 });
 
-// DELETE /api/clients/:id - delete client (admin check)
-router.delete('/:id', async (req, res) => {
-  if (!requireAdminPassword(req, res)) return;
-  const { id } = req.params;
-  if (!id || !ObjectId.isValid(id)) return res.status(400).json({ message: 'Invalid client ID' });
+// Get clients with their last order date and grouping by inactivity period
+router.get('/analytics/inactive-clients', async (req, res) => {
   try {
-    const { clientsCollection } = await connectDB();
-    const result = await clientsCollection.deleteOne({ _id: new ObjectId(id) });
-    if (result.deletedCount === 0) return res.status(404).json({ message: 'Client not found' });
-    res.json({ message: 'Client deleted' });
+    const { clientsCollection, futureOrdersCollection } = await connectDB();
+    
+    // Get all clients
+    const allClients = await clientsCollection.find({}).toArray();
+    
+    // For each client, find their last order date
+    const clientsWithOrderData = await Promise.all(
+      allClients.map(async (client) => {
+        const lastOrder = await futureOrdersCollection
+          .findOne({ clientName: client.name }, { sort: { createdAt: -1 } });
+        
+        const lastOrderDate = lastOrder ? new Date(lastOrder.createdAt) : null;
+        const today = new Date();
+        const daysInactive = lastOrderDate 
+          ? Math.floor((today - lastOrderDate) / (1000 * 60 * 60 * 24))
+          : 999999; // If no order found, consider it as very inactive
+        
+        let inactivityCategory = '';
+        if (daysInactive <= 30) {
+          inactivityCategory = '0-30 days';
+        } else if (daysInactive <= 60) {
+          inactivityCategory = '31-60 days';
+        } else if (daysInactive <= 90) {
+          inactivityCategory = '61-90 days';
+        } else {
+          inactivityCategory = '90+ days';
+        }
+        
+        return {
+          clientName: client.name,
+          phone: client.phone || '-',
+          address: client.address || '-',
+          lastOrderDate: lastOrderDate ? lastOrderDate.toLocaleDateString() : 'Never',
+          daysInactive,
+          inactivityCategory,
+        };
+      })
+    );
+    
+    // Sort by days inactive (descending)
+    clientsWithOrderData.sort((a, b) => b.daysInactive - a.daysInactive);
+    
+    res.json(clientsWithOrderData);
   } catch (err) {
-    console.error('/api/clients DELETE error', err);
-    res.status(500).json({ message: 'Failed to delete client' });
+    console.error('Error fetching inactive clients:', err);
+    res.status(500).json({ message: 'Server error while fetching inactive clients' });
   }
 });
 
