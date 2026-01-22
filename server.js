@@ -26,8 +26,34 @@ const billingRouter = require('./src/routes/billing');
 const app = express();
 const port = config.PORT;
 
-app.use(cors());
+// Configure CORS to allow your frontend domain
+const corsOptions = {
+  origin: [
+    'https://akoliteresin.github.io',
+    'https://dj4haaiis0la7.cloudfront.net',
+    'http://localhost:3000',
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
+
+// Global error handling middleware - log all errors
+app.use((err, req, res, next) => {
+  console.error('Error caught by middleware:', {
+    message: err.message,
+    stack: err.stack,
+    url: req.url,
+    method: req.method
+  });
+  res.status(err.status || 500).json({
+    message: err.message || 'Internal Server Error',
+    error: process.env.NODE_ENV === 'development' ? err : {}
+  });
+});
 
 // Authentication routes (no token required)
 app.use('/api/auth', authRouter);
@@ -95,6 +121,17 @@ app.put("/api/raw-materials/modify", async (req, res) => {
   }
 });
 // NOTE: Resin GET/POST/PUT/DELETE handled by `resins` router (falls back to static `data` when DB empty)
+
+// Global error handler middleware
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({ message: 'Internal server error', error: err.message });
+});
+
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({ message: 'Route not found' });
+});
 
 // ---------------- Start Server ----------------
 
